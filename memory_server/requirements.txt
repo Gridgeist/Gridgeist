@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+lancedb
+sentence-transformers
+torch
+numpy
+pytest
+httpx
+pytest-cov

@@ -7,7 +7,8 @@ const envSchema = z.object({
   DISCORD_TOKEN: z.string().min(1, "DISCORD_TOKEN is missing"),
   DISCORD_CLIENT_ID: z.string().min(1, "DISCORD_CLIENT_ID is missing"),
   GROQ_API_KEY: z.string().min(1, "GROQ_API_KEY is missing"),
-  MODAL_API_URL: z.string().url("MODAL_API_URL must be a valid URL"),
+  MODAL_API_URL: z.string().url("MODAL_API_URL must be a valid URL").optional(),
+  MEMORY_API_URL: z.string().url().default("http://127.0.0.1:8000"),
 });
 
 const env = envSchema.parse(process.env);
