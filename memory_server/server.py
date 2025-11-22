@@ -20,6 +20,16 @@ class UpsertRequest(BaseModel):
     user_id: str
     metadata: Optional[Dict[str, Any]] = None
 
+class DeleteRequest(BaseModel):
+    memory_id: str
+
+class UpdateRequest(BaseModel):
+    memory_id: str
+    new_text: str
+
+class FetchByIdsRequest(BaseModel):
+    memory_ids: List[str]
+
 class SearchRequest(BaseModel):
     query: str
     limit: int = 5
@@ -29,7 +39,8 @@ class Memory(BaseModel):
     vector: List[float]
     text: str
     user_id: str
-    timestamp: float
+    created_at: float
+    last_modified: Optional[float] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -60,7 +71,8 @@ async def lifespan(app: FastAPI):
                 pa.field("vector", pa.list_(pa.float32(), 384)),
                 pa.field("text", pa.string()),
                 pa.field("user_id", pa.string()),
-                pa.field("timestamp", pa.float64()),
+                pa.field("created_at", pa.float64()),
+                pa.field("last_modified", pa.float64()),
             ])
             app.state.table = app.state.db.create_table(table_name, schema=schema)
             logger.info(f"Created new table: {table_name}")
@@ -108,7 +120,8 @@ async def upsert_memory(req: UpsertRequest, request: Request):
             "vector": embedding.tolist(),
             "text": req.text,
             "user_id": req.user_id,
-            "timestamp": time.time()
+            "created_at": time.time(),
+            "last_modified": time.time()
         }
         
         # Add to LanceDB
@@ -119,6 +132,92 @@ async def upsert_memory(req: UpsertRequest, request: Request):
     except Exception as e:
         logger.error(f"Upsert failed: {e} (ReqID: {req_id})")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/delete")
+async def delete_memory(req: DeleteRequest, request: Request):
+    req_id = request.headers.get("X-Request-ID", "unknown")
+    
+    is_initialized = (hasattr(app.state, "table") and app.state.table is not None)
+    if not is_initialized:
+        raise HTTPException(status_code=503, detail="Server not fully initialized")
+
+    try:
+        logger.info(f"Processing delete for {req.memory_id} (ReqID: {req_id})")
+        app.state.table.delete(f"id = '{req.memory_id}'")
+        return {"status": "success", "id": req.memory_id}
+    except Exception as e:
+        logger.error(f"Delete failed: {e} (ReqID: {req_id})")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/update")
+async def update_memory(req: UpdateRequest, request: Request):
+    req_id = request.headers.get("X-Request-ID", "unknown")
+    
+    is_initialized = (hasattr(app.state, "model") and app.state.model is not None and hasattr(app.state, "table") and app.state.table is not None)
+    if not is_initialized:
+        raise HTTPException(status_code=503, detail="Server not fully initialized")
+
+    try:
+        logger.info(f"Processing update for {req.memory_id} (ReqID: {req_id})")
+        
+        # 1. Fetch existing to get metadata
+        results = app.state.table.search().where(f"id = '{req.memory_id}'").limit(1).to_list()
+        if not results:
+            raise HTTPException(status_code=404, detail="Memory not found")
+        
+        old_record = results[0]
+        
+        # 2. Delete old record
+        app.state.table.delete(f"id = '{req.memory_id}'")
+        
+        # 3. Embed new text
+        embedding = app.state.model.encode(req.new_text)
+        
+        # 4. Insert new record with updated text and last_modified
+        # Handle legacy 'timestamp' field if present
+        created_at = old_record.get("created_at", old_record.get("timestamp", time.time()))
+        user_id = old_record.get("user_id", "unknown")
+        
+        new_record = {
+            "id": req.memory_id,
+            "vector": embedding.tolist(),
+            "text": req.new_text,
+            "user_id": user_id,
+            "created_at": created_at,
+            "last_modified": time.time()
+        }
+        
+        app.state.table.add([new_record])
+        
+        return {"status": "success", "id": req.memory_id}
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Update failed: {e} (ReqID: {req_id})")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/fetch_by_ids")
+async def fetch_by_ids(req: FetchByIdsRequest, request: Request):
+    req_id = request.headers.get("X-Request-ID", "unknown")
+    
+    is_initialized = (hasattr(app.state, "table") and app.state.table is not None)
+    if not is_initialized:
+        raise HTTPException(status_code=503, detail="Server not fully initialized")
+
+    try:
+        logger.info(f"Processing fetch_by_ids for {len(req.memory_ids)} IDs (ReqID: {req_id})")
+        if not req.memory_ids:
+            return {"results": []}
+            
+        ids_str = ", ".join([f"'{mid}'" for mid in req.memory_ids])
+        results = app.state.table.search().where(f"id IN ({ids_str})").limit(len(req.memory_ids)).to_list()
+        
+        return {"results": results}
+    except Exception as e:
+        logger.error(f"Fetch failed: {e} (ReqID: {req_id})")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/search")
 async def search_memories(req: SearchRequest, request: Request):

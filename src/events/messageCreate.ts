@@ -45,8 +45,14 @@ export default {
         },
       ];
 
+      // Check for image attachments
+      const imageAttachment = message.attachments.find((att) =>
+        att.contentType?.startsWith("image/")
+      );
+      const imageUrl = imageAttachment?.proxyURL;
+
       // Generate response
-      const response = await generateResponse(messages);
+      const response = await generateResponse(messages, imageUrl);
 
       // Send response
       await message.reply({
