@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 import lancedb
 import torch
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 
@@ -88,12 +88,17 @@ def read_root():
     return {"status": "online", "gpu": is_gpu, "model": model_ready, "table": table_ready}
 
 @app.post("/upsert")
-async def upsert_memory(req: UpsertRequest):
-    if not (hasattr(app.state, "model") and app.state.model is not None and hasattr(app.state, "table") and app.state.table is not None):
-        logger.warning("Upsert requested but server not initialized")
+async def upsert_memory(req: UpsertRequest, request: Request):
+    req_id = request.headers.get("X-Request-ID", "unknown")
+    
+    is_initialized = (hasattr(app.state, "model") and app.state.model is not None and hasattr(app.state, "table") and app.state.table is not None)
+    
+    if not is_initialized:
+        logger.warning(f"Upsert requested but server not initialized (ReqID: {req_id})")
         raise HTTPException(status_code=503, detail="Server not fully initialized")
     
     try:
+        logger.info(f"Processing upsert (ReqID: {req_id})")
         # Generate embedding
         embedding = app.state.model.encode(req.text)
         
@@ -112,16 +117,19 @@ async def upsert_memory(req: UpsertRequest):
         return {"status": "success", "id": record["id"]}
         
     except Exception as e:
-        logger.error(f"Upsert failed: {e}")
+        logger.error(f"Upsert failed: {e} (ReqID: {req_id})")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/search")
-async def search_memories(req: SearchRequest):
+async def search_memories(req: SearchRequest, request: Request):
+    req_id = request.headers.get("X-Request-ID", "unknown")
+    
     model_ready = hasattr(app.state, "model") and app.state.model is not None
     table_ready = hasattr(app.state, "table") and app.state.table is not None
-    logger.info(f"Search requested. Model ready: {model_ready}, Table ready: {table_ready}")
-    if not (hasattr(app.state, "model") and app.state.model is not None and hasattr(app.state, "table") and app.state.table is not None):
-        logger.warning("Search requested but server not initialized")
+    logger.info(f"Search requested. Model ready: {model_ready}, Table ready: {table_ready} (ReqID: {req_id})")
+    
+    if not (model_ready and table_ready):
+        logger.warning(f"Search requested but server not initialized (ReqID: {req_id})")
         raise HTTPException(status_code=503, detail="Server not fully initialized")
         
     try:
@@ -134,5 +142,5 @@ async def search_memories(req: SearchRequest):
         return {"results": results}
         
     except Exception as e:
-        logger.error(f"Search failed: {e}")
+        logger.error(f"Search failed: {e} (ReqID: {req_id})")
         raise HTTPException(status_code=500, detail=str(e))
