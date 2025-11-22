@@ -1,6 +1,9 @@
 import Groq from "groq-sdk";
 import { Config } from "../../config";
 import { MemoryTools } from "../memory/tools";
+import { ImageGenerator } from "../image/generator";
+import { getDiscordClient } from "../../core/client";
+import { TextChannel, DMChannel } from "discord.js";
 
 const groq = new Groq({
   apiKey: Config.GROQ_API_KEY,
@@ -70,9 +73,45 @@ const AVAILABLE_TOOLS = [
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "generate_image",
+      description: "Generate a brand new image from scratch.",
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "Description of the image to generate" },
+          aspect_ratio: { type: "string", description: "Aspect ratio (e.g., '1:1', '16:9')" },
+        },
+        required: ["prompt", "aspect_ratio"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "edit_image",
+      description: "Modify an existing image using Flux Kontext. Use this when the user wants to change something in a picture.",
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "Description of the change to apply" },
+          image_reference: { type: "string", description: "Reference to the image (usually 'last_image')" },
+        },
+        required: ["prompt", "image_reference"],
+      },
+    },
+  },
 ];
 
-export async function generateResponse(messages: any[], userId: string, imageUrl?: string): Promise<any> {
+export async function generateResponse(
+  messages: any[], 
+  userId: string, 
+  channelId: string,
+  imageUrl?: string,
+  generatedFiles: string[] = []
+): Promise<{ content: string; files: string[] }> {
   try {
     let formattedMessages = [...messages];
 
@@ -132,6 +171,40 @@ export async function generateResponse(messages: any[], userId: string, imageUrl
             functionResult = await MemoryTools.updateMemory(functionArgs.memory_id, functionArgs.updated_content);
           } else if (functionName === "delete_memory") {
             functionResult = await MemoryTools.deleteMemory(functionArgs.memory_id);
+          } else if (functionName === "generate_image") {
+            const generator = new ImageGenerator();
+            const buffer = await generator.generate(functionArgs.prompt, functionArgs.aspect_ratio);
+            const path = await generator.saveTempImage(buffer);
+            generatedFiles.push(path);
+            functionResult = "Image generated successfully and prepared for sending.";
+          } else if (functionName === "edit_image") {
+            const client = getDiscordClient();
+            const channel = await client.channels.fetch(channelId) as TextChannel | DMChannel;
+            
+            if (!channel) {
+              throw new Error("Channel not found");
+            }
+
+            // Fetch recent messages to find the last image
+            const messages = await channel.messages.fetch({ limit: 20 });
+            const lastImageMsg = messages.find(m => m.attachments.size > 0 && m.attachments.first()?.contentType?.startsWith("image/"));
+            
+            if (!lastImageMsg) {
+               throw new Error("No recent image found in this channel to edit.");
+            }
+
+            const attachmentUrl = lastImageMsg.attachments.first()?.url;
+            if (!attachmentUrl) throw new Error("Could not get attachment URL");
+
+            const imageResponse = await fetch(attachmentUrl);
+            const arrayBuffer = await imageResponse.arrayBuffer();
+            const sourceBuffer = Buffer.from(arrayBuffer);
+
+            const generator = new ImageGenerator();
+            const buffer = await generator.edit(functionArgs.prompt, sourceBuffer);
+            const path = await generator.saveTempImage(buffer);
+            generatedFiles.push(path);
+            functionResult = "Image edited successfully and prepared for sending.";
           } else {
             functionResult = `Error: Unknown tool ${functionName}`;
           }
@@ -149,14 +222,17 @@ export async function generateResponse(messages: any[], userId: string, imageUrl
       }
 
       // Recursive call to generate final response with tool outputs
-      return generateResponse(formattedMessages, userId);
+      return generateResponse(formattedMessages, userId, channelId, undefined, generatedFiles);
     }
 
-    // No tool calls, return the standard message
-    return responseMessage;
+    // No tool calls, return the standard message and any files generated
+    return {
+      content: responseMessage.content || "",
+      files: generatedFiles
+    };
     
   } catch (error) {
     console.error("Groq API error:", error);
-    return { content: "my brain is offline. try again in a bit.", role: "assistant" };
+    return { content: "my brain is offline. try again in a bit.", files: generatedFiles };
   }
 }

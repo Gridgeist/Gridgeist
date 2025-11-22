@@ -4,6 +4,7 @@ export interface ShortTermMessage {
   author: string;
   content: string;
   timestamp: number;
+  imageUrl?: string;
 }
 
 // Key: Channel ID, Value: Array of recent messages
@@ -42,7 +43,14 @@ export const ShortTermMemory = {
     }
 
     return history
-      .map((msg) => `${msg.author}: ${msg.content}`)
+      .map((msg) => {
+        let text = `${msg.author}: ${msg.content}`;
+        // Only append if not already mentioned in content (avoid duplication for user messages)
+        if (msg.imageUrl && !text.includes(msg.imageUrl)) {
+          text += ` [Image Attached: ${msg.imageUrl}]`;
+        }
+        return text;
+      })
       .join("\n");
   },
   

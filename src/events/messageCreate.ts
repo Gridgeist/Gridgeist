@@ -68,16 +68,14 @@ export default {
         ];
 
         // Generate response
-        const response = await generateResponse(groqMessages, lastMessage.author.id, imageUrl);
+        const { content, files } = await generateResponse(
+          groqMessages, 
+          lastMessage.author.id, 
+          lastMessage.channelId,
+          imageUrl
+        );
 
-        let contentToSend = "";
-        if (typeof response === 'string') {
-            contentToSend = response;
-        } else if (response?.content) {
-            contentToSend = response.content;
-        } else {
-            contentToSend = "I'm speechless.";
-        }
+        const contentToSend = content || (files.length > 0 ? "" : "I'm speechless.");
 
         // Dynamic delay for natural feeling (20ms per character)
         const typingDelay = contentToSend.length * 20;
@@ -89,8 +87,9 @@ export default {
         }
 
         // Send response (reply to the last message)
-        await lastMessage.reply({
+        const sentMessage = await lastMessage.reply({
           content: contentToSend,
+          files: files,
           allowedMentions: { repliedUser: false },
         });
 
@@ -99,27 +98,9 @@ export default {
         
         // Save user message (combined)
         const rawStripped = stripBotMention(
-          combinedText, // This already has mentions parsed, so we might be double parsing if we strip mention again, but stripBotMention expects raw content usually.
-                        // Actually parseMentions returns cleaned content. stripBotMention removes <@ID>.
-                        // Let's use the combinedText which is already cleaned by parseMentions.
-                        // Wait, parseMentions replaces <@ID> with @Name. 
-                        // stripBotMention removes <@BotID> specifically.
-                        // If we already ran parseMentions, the bot mention is now @BotName.
-                        // So stripBotMention might not work as expected if called on cleanedContent.
-                        // Let's reconstruct raw content or just use combinedText as is for memory.
-                        // Usually we want memory to be readable. combinedText is readable.
-                        // Let's just verify if we need to strip the bot name if it was a mention.
-                        // If the user said "@Gridgeist hello", parseMentions makes it "@Gridgeist hello".
-                        // We might want to remove "@Gridgeist" for cleaner memory.
+          combinedText, 
           lastMessage.client.user?.id || ""
         );
-        
-        // Actually, let's iterate and clean raw content for memory to be safe, 
-        // or just use the combinedText which is already human readable.
-        // The previous logic did: stripBotMention -> parseMentions.
-        // Here we did parseMentions first on all messages. 
-        // Let's just use combinedText, but maybe remove the bot name if it starts with it?
-        // Simpler: Just store combinedText. It's human readable.
         
         let storedContent = combinedText;
 
@@ -132,12 +113,16 @@ export default {
           author: lastMessage.author.username,
           content: storedContent,
           timestamp: now,
+          imageUrl: imageUrl,
         });
+
+        const botImageUrl = sentMessage.attachments.first()?.url;
 
         ShortTermMemory.addMessage(lastMessage.channelId, {
           author: "Gridgeist",
           content: contentToSend,
           timestamp: now + 1,
+          imageUrl: botImageUrl,
         });
 
       } catch (error) {
