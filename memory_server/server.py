@@ -45,7 +45,8 @@ class Memory(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Initialize the model and database
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    import os
+    device = os.getenv('EMBEDDING_DEVICE', 'cpu')
     logger.info(f"Starting up... Selected device: {device}")
     
     # Initialize the model
