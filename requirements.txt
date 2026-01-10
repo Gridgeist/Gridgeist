@@ -1,0 +1,6 @@
+discord.py
+groq
+python-dotenv
+qdrant-client
+pydantic
+sentence-transformers
