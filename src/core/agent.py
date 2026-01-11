@@ -1,10 +1,11 @@
 import json
 import logging
 import inspect
+from datetime import datetime
 
 from src.config import SYSTEM_PROMPT
-from src.core.llm import GroqClient
 from src.core.registry import registry
+from src.utils.llm import GroqClient
 
 logger = logging.getLogger("Agent")
 
@@ -30,9 +31,14 @@ class Agent:
         context_data = await self.memory.get_context(user_input=user_input)
 
         # 2. Build Message History
+
+        now_str = datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S")
+
         system_message = {
             "role": "system",
-            "content": f"{SYSTEM_PROMPT}\n\nUser Name: {user_name}\n\n{context_data}\n\n"
+            "content": f"{SYSTEM_PROMPT}\n\nUser Name: {user_name}\n\n"
+            f"Current Time: {now_str}\n\n"
+            f"{context_data}\n\n"
             f"CURRENT CONTEXT: {json.dumps(context.get('server_info', {}))}",
         }
 

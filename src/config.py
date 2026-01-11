@@ -13,7 +13,10 @@ OWNER_ID = os.getenv("OWNER_ID", "332292974736179200")  # You should set this in
 
 
 # Model settings
-LLM_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct"  # Or "mixtral-8x7b-32768"
+LLM_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct"  # Primary model for user interaction
+SUMMARY_MODEL = (
+    "llama-3.3-70b-versatile"  # Lightweight model for background tasks like summaries
+)
 
 SYSTEM_PROMPT = """
 You are "Gridgeist", a highly intelligent, witty, and slightly chaotic AI assistant on a Discord server.

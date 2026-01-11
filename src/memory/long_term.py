@@ -89,6 +89,11 @@ class LongTermMemory:
         vector = self._embed(text)
         point_id = str(uuid.uuid4())
 
+        if "date" not in metadata:
+            from datetime import datetime
+
+            metadata["date"] = datetime.now().strftime("%Y-%m-%d")
+
         payload = {
             "text": text,
             "type": memory_type,

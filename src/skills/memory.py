@@ -57,7 +57,7 @@ def search_memory(
     user_id: str,
     query: str,
     session_id: str,
-    memory_type: Literal["core_fact", "episodic", "general", "all"] = "all",
+    memory_type: Literal["core_fact", "episodic", "general", "summary", "all"] = "all",
 ):
     """
     Search through Long-Term Memory for specific details.
@@ -167,3 +167,55 @@ def get_memory_status(user_id: str, session_id: str):
         return status
     except Exception as e:
         return f"❌ Failed to get memory status: {str(e)}"
+
+
+@tool
+def browse_diary(user_id: str, session_id: str, date: str = None, query: str = None):
+    """
+    Browse or search the bot's 'diary' (accumulated session summaries).
+    Use this to answer questions about the past, specific days, or recurring topics.
+
+    Args:
+        user_id: The ID of the user.
+        session_id: The current session ID.
+        date: Optional. Specific date to look up in YYYY-MM-DD format.
+        query: Optional. Semantic search query to find relevant past summaries.
+    """
+    try:
+        manager = get_manager(session_id, user_id)
+
+        if date:
+            # Exact date lookup
+            results = manager.long_term.get_by_filter(
+                {"user_id": user_id, "type": "summary", "date": date}, limit=10
+            )
+            if not results:
+                return f"I don't have any diary entries for {date}."
+            return f"Diary entries for {date}:\n" + "\n".join(
+                [f"- {r}" for r in results]
+            )
+
+        elif query:
+            # Semantic search for summaries
+            results = manager.long_term.search_memories(
+                query, limit=5, memory_type="summary"
+            )
+            if not results:
+                return f"No diary entries found matching '{query}'."
+            return "Relevant diary entries:\n" + "\n".join([f"- {r}" for r in results])
+
+        else:
+            # Get latest summaries
+            # Note: get_by_filter doesn't guarantee order, but we can't easily sort without more Qdrant logic here
+            # For now, just return a few recent ones
+            results = manager.long_term.get_by_filter(
+                {"user_id": user_id, "type": "summary"}, limit=5
+            )
+            if not results:
+                return "I haven't written any diary entries yet."
+            return "Here are some recent entries from my diary:\n" + "\n".join(
+                [f"- {r}" for r in results]
+            )
+
+    except Exception as e:
+        return f"❌ Failed to browse diary: {str(e)}"

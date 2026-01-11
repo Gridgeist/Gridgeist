@@ -1,12 +1,14 @@
 import logging
 
 import discord
+from discord.ext import tasks
 
 from src.core.agent import Agent
 from src.memory.manager import MemoryManager
 
 from src.core.registry import registry
-from src.core.logger import setup_rich_logging
+from src.utils.logging import setup_rich_logging
+
 
 # Load skills dynamically
 # This allows 'plugins' to be added simply by dropping files into src/skills
@@ -23,6 +25,23 @@ class BotClient(discord.Client):
     def __init__(self):
         super().__init__(intents=discord.Intents.all())
         self.agents = {}  # Map user_id -> Agent
+        self.daily_diary_maintenance.start()
+
+    @tasks.loop(hours=24)
+    async def daily_diary_maintenance(self):
+        """Background task to perform diary maintenance for all active sessions every 24 hours."""
+        logger.info("📅 Starting daily diary maintenance...")
+        for session_id, agent in self.agents.items():
+            try:
+                await agent.memory.maintain_temporal_diary(reason="daily_maintenance")
+            except Exception as e:
+                logger.error(
+                    f"Error in diary maintenance for session {session_id}: {e}"
+                )
+
+    @daily_diary_maintenance.before_loop
+    async def before_daily_diary_maintenance(self):
+        await self.wait_until_ready()
 
     async def on_ready(self):
         logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
@@ -46,7 +65,11 @@ class BotClient(discord.Client):
         user_name = message.author.display_name
 
         # 4. Pre-process: Resolve Mentions to plaintext
-        from src.core.utils import resolve_mentions, format_mentions, get_server_context
+        from src.utils.parsing import (
+            resolve_mentions,
+            format_mentions,
+            get_server_context,
+        )
 
         clean_content = resolve_mentions(message.content, message.guild)
 

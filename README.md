@@ -1,6 +1,6 @@
 # 👻 Gridgeist
 
-![Python Version](https://img.shields.io/badge/python-3.13%2B-blue?style=flat&logo=python)
+![Python Version](https://img.shields.io/badge/python-3.12%2B-blue?style=flat&logo=python)
 ![Package Manager](https://img.shields.io/badge/package_manager-uv-purple?style=flat)
 ![Status](https://img.shields.io/badge/status-active-success?style=flat)
 
@@ -19,7 +19,7 @@ The bot will try to connect to Qdrant at `http://localhost:6333`. The URL can be
 
 ### Prerequisites
 
-*   Python 3.13 or higher
+*   Python 3.12 or higher
 *   [uv](https://github.com/astral-sh/uv) (An extremely fast Python package installer and resolver)
 *   A Discord Bot Token ([Get one here](https://discord.com/developers/applications))
 

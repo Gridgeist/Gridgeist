@@ -80,6 +80,3 @@ def setup_rich_logging(level: int = logging.INFO):
     logging.getLogger("discord").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
-
-    # Test log
-    # logging.info("Aesthetic Logger initialized.")
