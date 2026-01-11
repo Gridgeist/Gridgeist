@@ -42,7 +42,7 @@ class ToolRegistry:
         param_docs = {}
         if docstring:
             # Simple parsing for "Args:" or "Parameters:" sections
-            lines = [l.strip() for l in docstring.split("\n")]
+            lines = [line.strip() for line in docstring.split("\n")]
             current_param = None
             in_args = False
 
