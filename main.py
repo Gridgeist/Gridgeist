@@ -10,6 +10,7 @@ async def main():
 
     # 2. Start the Bot
     try:
+        await bot.initialize()
         await bot.start(os.getenv("DISCORD_TOKEN"))
     except asyncio.CancelledError:
         pass
@@ -22,3 +23,5 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
+    finally:
+        print("\n👋 Gridgeist has been powered down. See you next time!")

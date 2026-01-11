@@ -10,12 +10,6 @@ from src.core.registry import registry
 from src.utils.logging import setup_rich_logging
 
 
-# Load skills dynamically
-# This allows 'plugins' to be added simply by dropping files into src/skills
-registry.load_skills("src.skills")
-
-
-# Setup basic logging
 # Setup aesthetic logging
 setup_rich_logging()
 logger = logging.getLogger("DiscordBot")
@@ -25,7 +19,17 @@ class BotClient(discord.Client):
     def __init__(self):
         super().__init__(intents=discord.Intents.all())
         self.agents = {}  # Map user_id -> Agent
-        self.daily_diary_maintenance.start()
+
+    async def initialize(self):
+        """Sequential startup sequence for aesthetic effect."""
+        import asyncio
+
+        logger.info("🚀 Initializing Gridgeist...")
+        await asyncio.sleep(0.5)
+
+        logger.info("🧩 Loading skill modules...")
+        registry.load_skills("src.skills")
+        await asyncio.sleep(0.5)
 
     @tasks.loop(hours=24)
     async def daily_diary_maintenance(self):
@@ -43,8 +47,32 @@ class BotClient(discord.Client):
     async def before_daily_diary_maintenance(self):
         await self.wait_until_ready()
 
+    async def close(self):
+        """Perform cleanup before shutting down."""
+        logger.info("🛑 Shutting down Gridgeist...")
+
+        # Stop background tasks
+        if self.daily_diary_maintenance.is_running():
+            self.daily_diary_maintenance.cancel()
+
+        # 1. Final Diary Maintenance for all active agents
+        if self.agents:
+            logger.info(f"💾 Saving state for {len(self.agents)} active sessions...")
+            for session_id, agent in self.agents.items():
+                try:
+                    logger.info(f"📝 Finalizing diary for session: {session_id}")
+                    await agent.memory.maintain_temporal_diary(reason="shutdown")
+                except Exception as e:
+                    logger.error(f"Failed final diary for {session_id}: {e}")
+
+        logger.info("🔌 Closing Discord connections...")
+        await super().close()
+        logger.info("✅ Shutdown complete.")
+
     async def on_ready(self):
-        logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
+        if not self.daily_diary_maintenance.is_running():
+            self.daily_diary_maintenance.start()
+        logger.info("📡 Connected and ready!")
 
     async def on_message(self, message):
         # 1. Ignore self and other bots

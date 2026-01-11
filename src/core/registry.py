@@ -115,7 +115,7 @@ class ToolRegistry:
                     try:
                         mod = importlib.import_module(full_name)
                         self._loaded_modules.add(mod)
-                        logger.info(f"Loaded skill module: {full_name}")
+                        logger.debug(f"Loaded skill module: {full_name}")
                     except Exception as e:
                         logger.error(f"Failed to load skill {full_name}: {e}")
             else:
@@ -145,7 +145,7 @@ class ToolRegistry:
                 try:
                     importlib.reload(mod)
                     reloaded_count += 1
-                    logger.info(f"Reloaded module: {mod.__name__}")
+                    logger.debug(f"Reloaded module: {mod.__name__}")
                 except Exception as e:
                     logger.error(f"Failed to reload {mod.__name__}: {e}")
 
